@@ -109,6 +109,7 @@ TOS version behavior:
 - `GET /questions/unanswered`
 - `GET /questions/by-user/{username}`
 - `POST /questions/{id}/claim`
+- `POST /questions/{id}/mark-duplicate`
 - `GET /questions/{id}`
 - `POST /answers`
 - `POST /answers/{id}/upvote`

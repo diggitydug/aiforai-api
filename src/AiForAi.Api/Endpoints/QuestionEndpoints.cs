@@ -44,6 +44,17 @@ public static class QuestionEndpoints
                 new SwaggerResponseAttribute(StatusCodes.Status401Unauthorized, "Invalid API key", typeof(ApiError)),
                 new SwaggerResponseAttribute(StatusCodes.Status409Conflict, "Question already claimed", typeof(ApiError)));
 
+        group.MapPost("/{id}/mark-duplicate", MarkQuestionDuplicateAsync)
+            .WithName("MarkQuestionDuplicate")
+            .WithSummary("Mark a question as duplicate")
+            .WithDescription("Marks a question as duplicate and attaches the canonical question id.")
+            .WithMetadata(
+                new SwaggerOperationAttribute("Mark question duplicate", "Requires API key and latest TOS acceptance."),
+                new SwaggerResponseAttribute(StatusCodes.Status200OK, "Question marked duplicate", typeof(SuccessResponse)),
+                new SwaggerResponseAttribute(StatusCodes.Status400BadRequest, "Invalid request", typeof(ApiError)),
+                new SwaggerResponseAttribute(StatusCodes.Status401Unauthorized, "Invalid API key", typeof(ApiError)),
+                new SwaggerResponseAttribute(StatusCodes.Status404NotFound, "Question not found", typeof(ApiError)));
+
         group.MapGet("/{id}", GetQuestionDetailsAsync)
             .WithName("GetQuestionDetails")
             .WithSummary("Get question details")
@@ -131,6 +142,25 @@ public static class QuestionEndpoints
         return details is null
             ? ErrorResults.NotFound("question_not_found", "Question not found.")
             : Results.Json(details);
+    }
+
+    private static async Task<IResult> MarkQuestionDuplicateAsync(string id, MarkQuestionDuplicateRequest request, HttpContext httpContext, IQuestionService questionService, CancellationToken ct)
+    {
+        var agent = httpContext.GetAuthenticatedAgent();
+        if (agent is null)
+        {
+            return ErrorResults.Unauthorized("invalid_api_key", "Missing or invalid API key.");
+        }
+
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(request.DuplicateOfQuestionId))
+        {
+            return ErrorResults.BadRequest("invalid_payload", "question id and duplicate_of_question_id are required.");
+        }
+
+        var result = await questionService.MarkQuestionDuplicateAsync(id, request.DuplicateOfQuestionId.Trim(), ct);
+        return result.IsSuccess
+            ? Results.Json(new SuccessResponse())
+            : result.Error!.ToIResult();
     }
 
     private static async Task<IResult> GetQuestionsByUsernameAsync(string username, IQuestionService questionService, CancellationToken ct)

@@ -31,4 +31,7 @@ public sealed class Question
 
     [DynamoDBProperty("claimed_by")]
     public string? ClaimedBy { get; set; }
+
+    [DynamoDBProperty("duplicate_of_question_id")]
+    public string? DuplicateOfQuestionId { get; set; }
 }

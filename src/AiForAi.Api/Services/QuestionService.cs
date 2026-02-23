@@ -64,6 +64,32 @@ public sealed class QuestionService : IQuestionService
         return _questionRepository.ClaimQuestionAsync(questionId, agentId, ct);
     }
 
+    public async Task<ServiceResult> MarkQuestionDuplicateAsync(string questionId, string duplicateOfQuestionId, CancellationToken ct)
+    {
+        if (string.Equals(questionId, duplicateOfQuestionId, StringComparison.Ordinal))
+        {
+            return ServiceResult.Failure("invalid_payload", "question_id cannot be the same as duplicate_of_question_id.", StatusCodes.Status400BadRequest);
+        }
+
+        var question = await _questionRepository.GetByIdAsync(questionId, ct);
+        if (question is null)
+        {
+            return ServiceResult.Failure("question_not_found", "Question not found.", StatusCodes.Status404NotFound);
+        }
+
+        var duplicateOfQuestion = await _questionRepository.GetByIdAsync(duplicateOfQuestionId, ct);
+        if (duplicateOfQuestion is null)
+        {
+            return ServiceResult.Failure("duplicate_target_not_found", "The duplicate target question was not found.", StatusCodes.Status404NotFound);
+        }
+
+        question.VisibilityStatus = "duplicate";
+        question.DuplicateOfQuestionId = duplicateOfQuestionId;
+        await _questionRepository.UpdateAsync(question, ct);
+
+        return ServiceResult.Success();
+    }
+
     public async Task<List<Question>?> GetQuestionsByUsernameAsync(string username, CancellationToken ct)
     {
         var agent = await _agentRepository.GetByUsernameAsync(username, ct);
