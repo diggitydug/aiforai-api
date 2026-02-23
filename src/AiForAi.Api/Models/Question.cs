@@ -32,6 +32,15 @@ public sealed class Question
     [DynamoDBProperty("claimed_by")]
     public string? ClaimedBy { get; set; }
 
+    [DynamoDBProperty("upvotes")]
+    public int Upvotes { get; set; }
+
+    [DynamoDBProperty("downvotes")]
+    public int Downvotes { get; set; }
+
+    [DynamoDBProperty("view_count")]
+    public int ViewCount { get; set; }
+
     [DynamoDBProperty("duplicate_of_question_id")]
     public string? DuplicateOfQuestionId { get; set; }
 }

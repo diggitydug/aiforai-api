@@ -8,10 +8,97 @@ namespace AiForAi.Api.Tests;
 public sealed class QuestionServiceTests
 {
     [Fact]
+    public async Task GetQuestionDetails_IncrementsViewCount()
+    {
+        var questionRepo = new InMemoryQuestionRepository();
+        var answerRepo = new InMemoryAnswerRepository();
+        var agentRepo = new NoopAgentRepository();
+
+        await questionRepo.CreateAsync(new Question { QuestionId = "q-views", ViewCount = 0 }, CancellationToken.None);
+
+        var service = new QuestionService(questionRepo, answerRepo, agentRepo);
+        var details = await service.GetQuestionDetailsAsync("q-views", CancellationToken.None);
+
+        Assert.NotNull(details);
+
+        var stored = await questionRepo.GetByIdAsync("q-views", CancellationToken.None);
+        Assert.NotNull(stored);
+        Assert.Equal(1, stored!.ViewCount);
+    }
+
+    [Fact]
+    public async Task GetTrendingQuestions_PrioritizesUnsolvedDiscussionAndViews()
+    {
+        var questionRepo = new InMemoryQuestionRepository();
+        var answerRepo = new InMemoryAnswerRepository();
+        var agentRepo = new NoopAgentRepository();
+
+        var solved = new Question { QuestionId = "q-solved", ViewCount = 50, Upvotes = 1, Downvotes = 0, CreatedAt = DateTime.UtcNow.AddHours(-3) };
+        var unsolved = new Question { QuestionId = "q-unsolved", ViewCount = 20, Upvotes = 2, Downvotes = 0, CreatedAt = DateTime.UtcNow.AddHours(-1) };
+
+        await questionRepo.CreateAsync(solved, CancellationToken.None);
+        await questionRepo.CreateAsync(unsolved, CancellationToken.None);
+
+        answerRepo.AddAnswer(new Answer
+        {
+            AnswerId = "a-1",
+            QuestionId = "q-solved",
+            Upvotes = 15,
+            Downvotes = 1,
+            Accepted = true,
+            IsRemoved = false
+        });
+
+        answerRepo.AddAnswer(new Answer
+        {
+            AnswerId = "a-2",
+            QuestionId = "q-unsolved",
+            Upvotes = 10,
+            Downvotes = 1,
+            Accepted = false,
+            IsRemoved = false
+        });
+
+        answerRepo.AddAnswer(new Answer
+        {
+            AnswerId = "a-3",
+            QuestionId = "q-unsolved",
+            Upvotes = 8,
+            Downvotes = 0,
+            Accepted = false,
+            IsRemoved = false
+        });
+
+        var service = new QuestionService(questionRepo, answerRepo, agentRepo);
+        var trending = await service.GetTrendingQuestionsAsync(0, 25, CancellationToken.None);
+
+        Assert.NotEmpty(trending);
+        Assert.Equal("q-unsolved", trending[0].QuestionId);
+    }
+
+    [Fact]
+    public async Task GetTrendingQuestions_RespectsOffsetAndLimit()
+    {
+        var questionRepo = new InMemoryQuestionRepository();
+        var answerRepo = new InMemoryAnswerRepository();
+        var agentRepo = new NoopAgentRepository();
+
+        await questionRepo.CreateAsync(new Question { QuestionId = "q-1", ViewCount = 100, CreatedAt = DateTime.UtcNow.AddMinutes(-3) }, CancellationToken.None);
+        await questionRepo.CreateAsync(new Question { QuestionId = "q-2", ViewCount = 90, CreatedAt = DateTime.UtcNow.AddMinutes(-2) }, CancellationToken.None);
+        await questionRepo.CreateAsync(new Question { QuestionId = "q-3", ViewCount = 80, CreatedAt = DateTime.UtcNow.AddMinutes(-1) }, CancellationToken.None);
+
+        var service = new QuestionService(questionRepo, answerRepo, agentRepo);
+        var page = await service.GetTrendingQuestionsAsync(1, 1, CancellationToken.None);
+
+        Assert.Single(page);
+        Assert.Equal("q-2", page[0].QuestionId);
+    }
+
+    [Fact]
     public async Task MarkQuestionDuplicate_SetsDuplicateLinkAndVisibility()
     {
         var questionRepo = new InMemoryQuestionRepository();
-        var answerRepo = new NoopAnswerRepository();
+        var answerRepo = new InMemoryAnswerRepository();
         var agentRepo = new NoopAgentRepository();
 
         var duplicateQuestion = new Question { QuestionId = "q-1", VisibilityStatus = "pending" };
@@ -35,7 +122,7 @@ public sealed class QuestionServiceTests
     public async Task MarkQuestionDuplicate_ReturnsNotFound_WhenCanonicalQuestionMissing()
     {
         var questionRepo = new InMemoryQuestionRepository();
-        var answerRepo = new NoopAnswerRepository();
+        var answerRepo = new InMemoryAnswerRepository();
         var agentRepo = new NoopAgentRepository();
 
         await questionRepo.CreateAsync(new Question { QuestionId = "q-1" }, CancellationToken.None);
@@ -96,13 +183,42 @@ public sealed class QuestionServiceTests
         }
     }
 
-    private sealed class NoopAnswerRepository : IAnswerRepository
+    private sealed class InMemoryAnswerRepository : IAnswerRepository
     {
-        public Task CreateAsync(Answer answer, CancellationToken ct) => Task.CompletedTask;
-        public Task<Answer?> GetByIdAsync(string answerId, CancellationToken ct) => Task.FromResult<Answer?>(null);
-        public Task<List<Answer>> GetByQuestionIdAsync(string questionId, CancellationToken ct) => Task.FromResult(new List<Answer>());
-        public Task<bool> HasVisibleAnswersForQuestionAsync(string questionId, CancellationToken ct) => Task.FromResult(false);
-        public Task UpdateAsync(Answer answer, CancellationToken ct) => Task.CompletedTask;
+        private readonly Dictionary<string, Answer> _answers = new();
+
+        public void AddAnswer(Answer answer)
+        {
+            _answers[answer.AnswerId] = answer;
+        }
+
+        public Task CreateAsync(Answer answer, CancellationToken ct)
+        {
+            _answers[answer.AnswerId] = answer;
+            return Task.CompletedTask;
+        }
+
+        public Task<Answer?> GetByIdAsync(string answerId, CancellationToken ct)
+        {
+            _answers.TryGetValue(answerId, out var answer);
+            return Task.FromResult(answer);
+        }
+
+        public Task<List<Answer>> GetByQuestionIdAsync(string questionId, CancellationToken ct)
+        {
+            return Task.FromResult(_answers.Values.Where(a => a.QuestionId == questionId).ToList());
+        }
+
+        public Task<bool> HasVisibleAnswersForQuestionAsync(string questionId, CancellationToken ct)
+        {
+            return Task.FromResult(_answers.Values.Any(a => a.QuestionId == questionId && !a.IsRemoved));
+        }
+
+        public Task UpdateAsync(Answer answer, CancellationToken ct)
+        {
+            _answers[answer.AnswerId] = answer;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class NoopAgentRepository : IAgentRepository

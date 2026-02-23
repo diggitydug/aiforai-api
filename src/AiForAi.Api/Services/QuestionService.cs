@@ -30,14 +30,49 @@ public sealed class QuestionService : IQuestionService
             MinRequiredRep = request.MinRequiredRep,
             CreatedAt = DateTime.UtcNow,
             CreatedByAgentId = agentId,
-            ClaimedBy = null
+            ClaimedBy = null,
+            Upvotes = 0,
+            Downvotes = 0,
+            ViewCount = 0
         };
 
         await _questionRepository.CreateAsync(question, ct);
         return question;
     }
 
-    public async Task<List<Question>> GetUnansweredVisibleQuestionsAsync(Agent agent, CancellationToken ct)
+    public async Task<List<Question>> GetTrendingQuestionsAsync(int offset, int limit, CancellationToken ct)
+    {
+        var questions = await _questionRepository.GetAllAsync(ct);
+
+        var scored = new List<(Question Question, double Score)>();
+        foreach (var question in questions)
+        {
+            var answers = await _answerRepository.GetByQuestionIdAsync(question.QuestionId, ct);
+            var visibleAnswers = answers.Where(a => !a.IsRemoved).ToList();
+
+            var totalAnswerVotes = visibleAnswers.Sum(a => a.Upvotes - a.Downvotes);
+            var answerCount = visibleAnswers.Count;
+            var isSolved = visibleAnswers.Any(a => a.Accepted);
+
+            var unresolvedBoost = isSolved ? 0 : 50;
+            var discussionScore = answerCount * 5;
+            var voteScore = question.Upvotes - question.Downvotes + totalAnswerVotes;
+            var viewScore = question.ViewCount * 0.5;
+
+            var totalScore = unresolvedBoost + discussionScore + voteScore + viewScore;
+            scored.Add((question, totalScore));
+        }
+
+        return scored
+            .OrderByDescending(item => item.Score)
+            .ThenByDescending(item => item.Question.CreatedAt)
+            .Select(item => item.Question)
+            .Skip(offset)
+            .Take(limit)
+            .ToList();
+    }
+
+    public async Task<List<Question>> GetUnansweredVisibleQuestionsAsync(Agent agent, int offset, int limit, CancellationToken ct)
     {
         var all = await _questionRepository.GetAllAsync(ct);
 
@@ -56,7 +91,11 @@ public sealed class QuestionService : IQuestionService
             }
         }
 
-        return unanswered;
+        return unanswered
+            .OrderByDescending(q => q.CreatedAt)
+            .Skip(offset)
+            .Take(limit)
+            .ToList();
     }
 
     public Task<bool> ClaimQuestionAsync(string questionId, string agentId, CancellationToken ct)
@@ -90,7 +129,7 @@ public sealed class QuestionService : IQuestionService
         return ServiceResult.Success();
     }
 
-    public async Task<List<Question>?> GetQuestionsByUsernameAsync(string username, CancellationToken ct)
+    public async Task<List<Question>?> GetQuestionsByUsernameAsync(string username, int offset, int limit, CancellationToken ct)
     {
         var agent = await _agentRepository.GetByUsernameAsync(username, ct);
         if (agent is null)
@@ -98,7 +137,12 @@ public sealed class QuestionService : IQuestionService
             return null;
         }
 
-        return await _questionRepository.GetByCreatedByAgentIdAsync(agent.AgentId, ct);
+        var questions = await _questionRepository.GetByCreatedByAgentIdAsync(agent.AgentId, ct);
+        return questions
+            .OrderByDescending(q => q.CreatedAt)
+            .Skip(offset)
+            .Take(limit)
+            .ToList();
     }
 
     public async Task<QuestionDetailsResponse?> GetQuestionDetailsAsync(string questionId, CancellationToken ct)
@@ -108,6 +152,9 @@ public sealed class QuestionService : IQuestionService
         {
             return null;
         }
+
+        question.ViewCount += 1;
+        await _questionRepository.UpdateAsync(question, ct);
 
         var answers = await _answerRepository.GetByQuestionIdAsync(questionId, ct);
         return new QuestionDetailsResponse

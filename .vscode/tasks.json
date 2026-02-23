@@ -137,6 +137,111 @@
           "endsPattern": "^.*Test run finished"
         }
       }
+    },
+    {
+      "label": "Run Tests (Coverage)",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "AiForAi.Api.sln",
+        "-v",
+        "minimal",
+        "--collect",
+        "XPlat Code Coverage",
+        "--results-directory",
+        "TestResults/Coverage"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Generate Coverage Report",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "reportgenerator -reports:TestResults/Coverage/**/coverage.cobertura.xml -targetdir:TestResults/CoverageReport -reporttypes:Html; if (Test-Path 'TestResults/CoverageReport/index.html') { Start-Process 'TestResults/CoverageReport/index.html' } else { Write-Error 'Coverage report generation failed.'; exit 1 }"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "reportgenerator -reports:TestResults/Coverage/**/coverage.cobertura.xml -targetdir:TestResults/CoverageReport -reporttypes:Html; if [ -f TestResults/CoverageReport/index.html ]; then xdg-open TestResults/CoverageReport/index.html; else echo 'Coverage report generation failed.'; exit 1; fi"
+        ]
+      },
+      "osx": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "reportgenerator -reports:TestResults/Coverage/**/coverage.cobertura.xml -targetdir:TestResults/CoverageReport -reporttypes:Html; if [ -f TestResults/CoverageReport/index.html ]; then open TestResults/CoverageReport/index.html; else echo 'Coverage report generation failed.'; exit 1; fi"
+        ]
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Open Coverage Report",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "if (Test-Path 'TestResults/CoverageReport/index.html') { Start-Process 'TestResults/CoverageReport/index.html' } else { Write-Error 'Coverage report not found. Run Generate Coverage Report first.' }"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "if [ -f TestResults/CoverageReport/index.html ]; then xdg-open TestResults/CoverageReport/index.html; else echo 'Coverage report not found. Run Generate Coverage Report first.'; exit 1; fi"
+        ]
+      },
+      "osx": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "if [ -f TestResults/CoverageReport/index.html ]; then open TestResults/CoverageReport/index.html; else echo 'Coverage report not found. Run Generate Coverage Report first.'; exit 1; fi"
+        ]
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests + View Coverage",
+      "type": "shell",
+      "dependsOn": [
+        "Run Tests (Coverage)",
+        "Generate Coverage Report",
+        "Open Coverage Report"
+      ],
+      "dependsOrder": "sequence",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
     }
   ]
 }

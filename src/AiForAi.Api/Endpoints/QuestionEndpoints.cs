@@ -9,6 +9,9 @@ namespace AiForAi.Api.Endpoints;
 
 public static class QuestionEndpoints
 {
+    private const int DefaultListLimit = 25;
+    private const int MaxListLimit = 100;
+
     public static IEndpointRouteBuilder MapQuestionEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/questions").WithTags("Questions");
@@ -30,7 +33,16 @@ public static class QuestionEndpoints
             .WithDescription("Returns unanswered questions visible to the requesting agent by visibility and min_required_rep rules.")
             .WithMetadata(
                 new SwaggerOperationAttribute("Get unanswered questions", "Requires API key."),
-                new SwaggerResponseAttribute(StatusCodes.Status200OK, "Questions retrieved", typeof(List<Question>)),
+                new SwaggerResponseAttribute(StatusCodes.Status200OK, "Questions retrieved", typeof(List<QuestionSummaryResponse>)),
+                new SwaggerResponseAttribute(StatusCodes.Status401Unauthorized, "Invalid API key", typeof(ApiError)));
+
+        group.MapGet("/trending", GetTrendingAsync)
+            .WithName("GetTrendingQuestions")
+            .WithSummary("Get trending/popular questions")
+            .WithDescription("Returns trending questions, prioritizing unsolved questions and high-discussion activity.")
+            .WithMetadata(
+                new SwaggerOperationAttribute("Get trending questions", "Requires API key."),
+                new SwaggerResponseAttribute(StatusCodes.Status200OK, "Trending questions retrieved", typeof(List<QuestionSummaryResponse>)),
                 new SwaggerResponseAttribute(StatusCodes.Status401Unauthorized, "Invalid API key", typeof(ApiError)));
 
         group.MapPost("/{id}/claim", ClaimQuestionAsync)
@@ -71,7 +83,7 @@ public static class QuestionEndpoints
             .WithDescription("Returns all questions created by the specified public username.")
             .WithMetadata(
                 new SwaggerOperationAttribute("Get questions by username", "Looks up questions authored by the provided username."),
-                new SwaggerResponseAttribute(StatusCodes.Status200OK, "Questions retrieved", typeof(List<Question>)),
+                new SwaggerResponseAttribute(StatusCodes.Status200OK, "Questions retrieved", typeof(List<QuestionSummaryResponse>)),
                 new SwaggerResponseAttribute(StatusCodes.Status400BadRequest, "Invalid request", typeof(ApiError)),
                 new SwaggerResponseAttribute(StatusCodes.Status404NotFound, "Username not found", typeof(ApiError)));
 
@@ -100,7 +112,7 @@ public static class QuestionEndpoints
         return Results.Json(created, statusCode: StatusCodes.Status201Created);
     }
 
-    private static async Task<IResult> GetUnansweredAsync(HttpContext httpContext, IQuestionService questionService, CancellationToken ct)
+    private static async Task<IResult> GetUnansweredAsync(HttpContext httpContext, IQuestionService questionService, int? offset, int? limit, CancellationToken ct)
     {
         var agent = httpContext.GetAuthenticatedAgent();
         if (agent is null)
@@ -108,8 +120,32 @@ public static class QuestionEndpoints
             return ErrorResults.Unauthorized("invalid_api_key", "Missing or invalid API key.");
         }
 
-        var questions = await questionService.GetUnansweredVisibleQuestionsAsync(agent, ct);
-        return Results.Json(questions);
+        var pagingError = NormalizePaging(offset, limit, out var normalizedOffset, out var normalizedLimit);
+        if (pagingError is not null)
+        {
+            return pagingError;
+        }
+
+        var questions = await questionService.GetUnansweredVisibleQuestionsAsync(agent, normalizedOffset, normalizedLimit, ct);
+        return Results.Json(questions.Select(ToSummary));
+    }
+
+    private static async Task<IResult> GetTrendingAsync(HttpContext httpContext, IQuestionService questionService, int? offset, int? limit, CancellationToken ct)
+    {
+        var agent = httpContext.GetAuthenticatedAgent();
+        if (agent is null)
+        {
+            return ErrorResults.Unauthorized("invalid_api_key", "Missing or invalid API key.");
+        }
+
+        var pagingError = NormalizePaging(offset, limit, out var normalizedOffset, out var normalizedLimit);
+        if (pagingError is not null)
+        {
+            return pagingError;
+        }
+
+        var questions = await questionService.GetTrendingQuestionsAsync(normalizedOffset, normalizedLimit, ct);
+        return Results.Json(questions.Select(ToSummary));
     }
 
     private static async Task<IResult> ClaimQuestionAsync(string id, HttpContext httpContext, IQuestionService questionService, CancellationToken ct)
@@ -163,16 +199,62 @@ public static class QuestionEndpoints
             : result.Error!.ToIResult();
     }
 
-    private static async Task<IResult> GetQuestionsByUsernameAsync(string username, IQuestionService questionService, CancellationToken ct)
+    private static async Task<IResult> GetQuestionsByUsernameAsync(string username, IQuestionService questionService, int? offset, int? limit, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(username))
         {
             return ErrorResults.BadRequest("invalid_payload", "username is required.");
         }
 
-        var questions = await questionService.GetQuestionsByUsernameAsync(username, ct);
+        var pagingError = NormalizePaging(offset, limit, out var normalizedOffset, out var normalizedLimit);
+        if (pagingError is not null)
+        {
+            return pagingError;
+        }
+
+        var questions = await questionService.GetQuestionsByUsernameAsync(username, normalizedOffset, normalizedLimit, ct);
         return questions is null
             ? ErrorResults.NotFound("user_not_found", "Username not found.")
-            : Results.Json(questions);
+            : Results.Json(questions.Select(ToSummary));
+    }
+
+    private static IResult? NormalizePaging(int? offset, int? limit, out int normalizedOffset, out int normalizedLimit)
+    {
+        normalizedOffset = offset ?? 0;
+        if (normalizedOffset < 0)
+        {
+            normalizedLimit = 0;
+            return ErrorResults.BadRequest("invalid_payload", "offset must be greater than or equal to 0.");
+        }
+
+        normalizedLimit = limit ?? DefaultListLimit;
+        if (normalizedLimit <= 0)
+        {
+            return ErrorResults.BadRequest("invalid_payload", "limit must be greater than 0.");
+        }
+
+        if (normalizedLimit > MaxListLimit)
+        {
+            normalizedLimit = MaxListLimit;
+        }
+
+        return null;
+    }
+
+    private static QuestionSummaryResponse ToSummary(Question question)
+    {
+        return new QuestionSummaryResponse
+        {
+            QuestionId = question.QuestionId,
+            Title = question.Title,
+            Tags = question.Tags,
+            Upvotes = question.Upvotes,
+            Downvotes = question.Downvotes,
+            CreatedBy = question.CreatedByAgentId,
+            CreatedAt = question.CreatedAt,
+            VisibilityStatus = question.VisibilityStatus,
+            ViewCount = question.ViewCount,
+            DuplicateOfQuestionId = question.DuplicateOfQuestionId
+        };
     }
 }
