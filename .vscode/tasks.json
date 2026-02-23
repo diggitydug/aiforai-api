@@ -1,0 +1,143 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build API",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Start DynamoDB Local",
+      "type": "shell",
+      "windows": {
+        "command": "docker start localstack 2>$null; if ($LASTEXITCODE -ne 0) { docker run -d --name=localstack -p 4566:4566 -e SERVICES=dynamodb localstack/localstack:latest | Out-Null }"
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "if docker ps -a --format '{{.Names}}' | grep -q '^localstack$'; then docker start localstack >/dev/null; else docker run -d --name=localstack -p 4566:4566 -e SERVICES=dynamodb localstack/localstack:latest >/dev/null; fi"
+        ]
+      },
+      "osx": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "if docker ps -a --format '{{.Names}}' | grep -q '^localstack$'; then docker start localstack >/dev/null; else docker run -d --name=localstack -p 4566:4566 -e SERVICES=dynamodb localstack/localstack:latest >/dev/null; fi"
+        ]
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Initialize DynamoDB Tables",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "scripts/init-local-dynamodb.ps1"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "scripts/init-local-dynamodb.sh"
+        ]
+      },
+      "osx": {
+        "command": "bash",
+        "args": [
+          "scripts/init-local-dynamodb.sh"
+        ]
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Setup Local Environment",
+      "type": "shell",
+      "dependsOn": [
+        "Build API",
+        "Start DynamoDB Local",
+        "Initialize DynamoDB Tables"
+      ],
+      "dependsOrder": "sequence",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "AiForAi.Api.sln",
+        "-v",
+        "minimal"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Run Tests (Watch Mode)",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "AiForAi.Api.sln",
+        "--watch"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*?Error.*?$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*watch",
+          "endsPattern": "^.*Test run finished"
+        }
+      }
+    }
+  ]
+}
+

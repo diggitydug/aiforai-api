@@ -1,0 +1,163 @@
+name: Terraform Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/terraform/**"
+      - "src/**"
+      - ".github/workflows/terraform-deploy.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      deploy_dev:
+        description: "Deploy dev"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      deploy_prod:
+        description: "Deploy prod"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-dev:
+    name: Deploy Dev
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_dev == 'true')
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build Lambda package
+        run: |
+          dotnet publish src/AiForAi.Api/AiForAi.Api.csproj -c Release -o artifacts/publish
+          cd artifacts/publish
+          zip -r ../aiforai-api.zip .
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate Custom Domain Configuration (Dev)
+        run: |
+          if grep -q "api_domain_name" infra/terraform/environments/dev.tfvars && [ -z "${{ vars.ACM_CERTIFICATE_ARN }}" ]; then
+            echo "ERROR: Custom domain is configured in dev.tfvars but ACM_CERTIFICATE_ARN GitHub variable is not set"
+            exit 1
+          fi
+          if grep -q "api_domain_name" infra/terraform/environments/dev.tfvars && [ -z "${{ vars.ROUTE53_ZONE_ID }}" ]; then
+            echo "ERROR: Custom domain is configured in dev.tfvars but ROUTE53_ZONE_ID GitHub variable is not set"
+            exit 1
+          fi
+
+      - name: Configure AWS Credentials (Dev)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform Init (Dev)
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -backend-config="key=aiforai-api/dev/terraform.tfstate"
+
+      - name: Terraform Validate (Dev)
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Terraform Apply (Dev)
+        working-directory: infra/terraform
+        env:
+          TF_VAR_acm_certificate_arn: ${{ vars.ACM_CERTIFICATE_ARN || '' }}
+          TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID || '' }}
+        run: |
+          terraform apply -auto-approve \
+            -var-file="environments/dev.tfvars" \
+            -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -var="lambda_zip_path=../../artifacts/aiforai-api.zip"
+
+  deploy-prod:
+    name: Deploy Prod
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_prod == 'true')
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build Lambda package
+        run: |
+          dotnet publish src/AiForAi.Api/AiForAi.Api.csproj -c Release -o artifacts/publish
+          cd artifacts/publish
+          zip -r ../aiforai-api.zip .
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate Custom Domain Configuration (Prod)
+        run: |
+          if grep -q "api_domain_name" infra/terraform/environments/prod.tfvars && [ -z "${{ vars.ACM_CERTIFICATE_ARN }}" ]; then
+            echo "ERROR: Custom domain is configured in prod.tfvars but ACM_CERTIFICATE_ARN GitHub variable is not set"
+            exit 1
+          fi
+          if grep -q "api_domain_name" infra/terraform/environments/prod.tfvars && [ -z "${{ vars.ROUTE53_ZONE_ID }}" ]; then
+            echo "ERROR: Custom domain is configured in prod.tfvars but ROUTE53_ZONE_ID GitHub variable is not set"
+            exit 1
+          fi
+
+      - name: Configure AWS Credentials (Prod)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform Init (Prod)
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -backend-config="key=aiforai-api/prod/terraform.tfstate"
+
+      - name: Terraform Validate (Prod)
+        working-directory: infra/terraform
+        run: terraform validate
+
+      - name: Terraform Apply (Prod)
+        working-directory: infra/terraform
+        env:
+          TF_VAR_acm_certificate_arn: ${{ vars.ACM_CERTIFICATE_ARN || '' }}
+          TF_VAR_route53_zone_id: ${{ vars.ROUTE53_ZONE_ID || '' }}
+        run: |
+          terraform apply -auto-approve \
+            -var-file="environments/prod.tfvars" \
+            -var="aws_region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -var="lambda_zip_path=../../artifacts/aiforai-api.zip"

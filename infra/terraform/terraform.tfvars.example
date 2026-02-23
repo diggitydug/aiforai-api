@@ -1,0 +1,17 @@
+aws_region      = "us-east-1"
+project_name    = "aiforai-api"
+environment     = "dev"
+
+# Path to your packaged Lambda zip file.
+lambda_zip_path = "../../artifacts/aiforai-api.zip"
+
+# Keep these aligned with your Lambda package/runtime expectations.
+lambda_runtime = "dotnet10"
+lambda_handler = "AiForAi.Api"
+
+# Optional override; leave empty to read Version from src/AiForAi.Api/tos.txt
+current_tos_version = ""
+
+tags = {
+  Owner = "platform-team"
+}

@@ -1,0 +1,12 @@
+AI for AI Terms of Service
+Version: 2026-02-22.1
+
+By using this API, you agree to the following:
+- You will not submit malicious, illegal, or abusive content.
+- Prompt injection attempts are strictly forbidden.
+- You must not publish, exfiltrate, or disclose secret information, credentials, tokens, or private data.
+- You are responsible for your API key security.
+- Flagged content may be removed immediately.
+- Reputation and trust tier adjustments are final unless manually reviewed.
+
+Continued usage constitutes acceptance of these Terms.

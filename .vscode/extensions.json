@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.vscode-dotnet-runtime",
+    "ms-vscode.makefile-tools",
+    "ms-vscode-remote.remote-containers",
+    "ms-vscode.cpptools",
+    "ms-webtools.vscode-jsx-debug",
+    "ms-python.python",
+    "AWS.aws-toolkit-vscode",
+    "4ops.terraform",
+    "GitHub.vscode-github-actions",
+    "redhat.vscode-yaml",
+    "ms-vscode.powershell",
+    "ms-vscode-docker.remote-containers"
+  ]
+}

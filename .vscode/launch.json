@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C#: AiForAi.Api",
+      "type": "dotnet",
+      "request": "launch",
+      "preLaunchTask": "Setup Local Environment",
+      "projectPath": "${workspaceFolder}/src/AiForAi.Api/AiForAi.Api.csproj"
+    }
+  ]
+}
+

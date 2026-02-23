@@ -1,0 +1,49 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "ms-dotnettools.csharp",
+  "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp",
+    "editor.formatOnSave": true
+  },
+  "omnisharp.enableRoslynAnalyzers": true,
+  "omnisharp.analyzeOpenDocumentsOnly": false,
+  "dotnet.defaultSolutionOrProject": "AiForAi.Api.sln",
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/.terraform": true,
+    "**/*.tfstate": true,
+    "**/*.tfstate.*": true,
+    "**/DynamoDBLocal_lib": true,
+    "**/.dynamodb": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/.terraform": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/artifacts": true,
+    "**/.terraform": true
+  },
+  "dotnet.inlineHints.enableInlayHints": true,
+  "[json]": {
+    "editor.defaultFormatter": "ms-vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "ms-vscode.json-language-features"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "ms-vscode.yaml",
+    "editor.formatOnSave": false
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.defaultProfile.osx": "bash",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "debug.onTaskErrors": "preLaunchTask"
+}
